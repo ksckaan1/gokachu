@@ -43,8 +43,8 @@ import (
 func main() {
 	cache := gokachu.New[string, string](gokachu.Config{
 		ReplacementStrategy: gokachu.ReplacementStrategyLRU,
-		MaxRecordTreshold:   1000,
-		CleanNum:            100,
+		MaxRecordTreshold:   1_000, // When it reaches 1_000 records,
+		CleanNum:            100, // Cleans 100 records.
 	})
 	defer cache.Close()
 
