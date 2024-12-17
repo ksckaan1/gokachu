@@ -176,10 +176,15 @@ func (g *Gokachu[K, V]) set(key K, v V, ttl time.Duration) {
 		g.clean()
 	}
 
+	exp := time.Time{}
+	if ttl > 0 {
+		exp = time.Now().Add(ttl)
+	}
+
 	value := &valueWithTTL[K, V]{
 		key:        key,
 		value:      v,
-		expireTime: time.Now().Add(ttl),
+		expireTime: exp,
 	}
 
 	// if exists
