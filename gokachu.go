@@ -2,6 +2,7 @@ package gokachu
 
 import (
 	"container/list"
+	"slices"
 	"sync"
 	"time"
 )
@@ -100,6 +101,17 @@ func (g *Gokachu[K, V]) Delete(key K) {
 	delete(g.store, key)
 }
 
+// DeleteFunc deletes values from the cache for which the callback returns true.
+func (g *Gokachu[K, V]) DeleteFunc(cb func(key K, value V) bool) {
+	defer g.lock()()
+	for key, value := range g.store {
+		if cb(key, value.Value.(*valueWithTTL[K, V]).value) {
+			g.elems.Remove(value)
+			delete(g.store, key)
+		}
+	}
+}
+
 // Flush deletes all values from the cache.
 func (g *Gokachu[K, V]) Flush() {
 	defer g.lock()()
@@ -117,12 +129,37 @@ func (g *Gokachu[K, V]) Keys() []K {
 	return keys
 }
 
+// KeysFunc returns all keys in the cache for which the callback returns true.
+func (g *Gokachu[K, V]) KeysFunc(cb func(key K, value V) bool) []K {
+	defer g.lock()()
+	keys := make([]K, 0, len(g.store))
+	for e := g.elems.Front(); e != nil; e = e.Next() {
+		if cb(e.Value.(*valueWithTTL[K, V]).key, e.Value.(*valueWithTTL[K, V]).value) {
+			keys = append(keys, e.Value.(*valueWithTTL[K, V]).key)
+		}
+	}
+	return slices.Clip(keys)
+}
+
 // Count returns the number of values in the cache.
 func (g *Gokachu[K, V]) Count() int {
 	defer g.lock()()
 	return g.elems.Len()
 }
 
+// CountFunc returns the number of values in the cache for which the callback returns true.
+func (g *Gokachu[K, V]) CountFunc(cb func(key K, value V) bool) int {
+	defer g.lock()()
+	count := 0
+	for key, value := range g.store {
+		if cb(key, value.Value.(*valueWithTTL[K, V]).value) {
+			count++
+		}
+	}
+	return count
+}
+
+// Close closes the cache.
 func (g *Gokachu[K, V]) Close() {
 	if g.pollCancel == nil {
 		return
