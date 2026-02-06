@@ -8,19 +8,25 @@
 [![Contributors](https://img.shields.io/github/contributors/ksckaan1/gokachu)](https://github.com/ksckaan1/gokachu/graphs/contributors)
 [![LICENSE](https://img.shields.io/badge/LICENCE-MIT-orange?style=flat)](./LICENSE)
 
-In-memory cache with TTL and generics support.
+# Gokachu
+
+Gokachu is a powerful and easy-to-use in-memory cache library for Go. It provides a generic, thread-safe cache with Time-To-Live (TTL) support and a variety of cache replacement strategies.
 
 ## Features
-- TTL support
-- Generics support
-- Supported Cache Replacement Strategies
+
+- **Thread-safe:** Can be safely used in concurrent applications.
+- **Generics support:** Store any type of data.
+- **TTL (Time-To-Live) support:** Automatically remove expired items.
+- **Cache Replacement Strategies:**
   - LRU (Least Recently Used)
   - MRU (Most Recently Used)
   - LFU (Least Frequently Used)
   - MFU (Most Frequently Used)
   - FIFO (First In First Out)
   - LIFO (Last In First Out)
-  - NONE (no replacement)
+  - None (no replacement)
+- **Hooks:** Execute custom functions on `Set`, `Get`, `Delete`, and `Miss` events.
+- **Flexible API:** Rich set of methods for cache manipulation.
 
 ## Installation
 
@@ -28,70 +34,143 @@ In-memory cache with TTL and generics support.
 go get -u github.com/ksckaan1/gokachu@latest
 ```
 
-## Example
+## Usage
+
+### Basic Example
 
 ```go
 package main
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ksckaan1/gokachu"
 )
 
 func main() {
+	// Create a new cache with LRU replacement strategy.
 	cache := gokachu.New[string, string](gokachu.Config{
 		ReplacementStrategy: gokachu.ReplacementStrategyLRU,
-		MaxRecordTreshold:   1_000, // When it reaches 1_000 records,
-		CleanNum:            100,   // Cleans 100 records.
+		MaxRecordThreshold:  1000, // When it reaches 1000 records,
+		CleanNum:            100,  // Cleans 100 records.
 	})
 	defer cache.Close()
 
-	// Set with TTL
-	cache.SetWithTTL("token/user_id:1", "eyJhbGciOiJ...", 30*time.Minute)
+	// Set a value with a 30-minute TTL.
+	cache.Set("my-key", "my-value", 30*time.Minute)
 
-	// Set without TTL
-	cache.Set("get_user_response/user_id:1", "John Doe")
-	cache.Set("get_user_response/user_id:2", "Jane Doe")
+	// Get a value.
+	value, found := cache.Get("my-key")
+	if found {
+		fmt.Println("Found:", value)
+	} else {
+		fmt.Println("Not found.")
+	}
 
-	// Delete specific key
-	cache.Delete("get_user_response/user_id:1")
-
-	// Delete keys with "token" prefix
-	cache.DeleteFunc(func(key, _ string) bool {
-		return strings.HasPrefix(key, "token")
-	})
-
-	// Get (uses comma ok idiom)
-	fmt.Println(cache.Get("get_user_response/user_id:2")) // eyJhbGciOiJ..., true
-	fmt.Println(cache.Get("get_user_response/user_id:1")) // "", false
-
-	fmt.Println("keys", cache.Keys()) // List of keys
-
-	// List only keys start with "token"
-	filteredKeys := cache.KeysFunc(func(key, _ string) bool {
-		return strings.HasPrefix(key, "token")
-	})
-	fmt.Println("filteredKeys", filteredKeys)
-
-	fmt.Println("count", cache.Count()) // Number of keys
-
-	// Count only keys start with "token"
-	filteredCount := cache.CountFunc(func(key, _ string) bool {
-		return strings.HasPrefix(key, "token")
-	})
-	fmt.Println("filteredCount", filteredCount)
-
-	cache.Flush() // Deletes all keys
+	// Delete a value.
+	cache.Delete("my-key")
 }
-
 ```
 
-## Benchmark Tests
+### Configuration
 
-### Set With TTL / Set Without TTL
+You can configure the cache using the `gokachu.Config` struct:
+
+```go
+config := gokachu.Config{
+	ReplacementStrategy: gokachu.ReplacementStrategyLRU, // Eviction policy
+	MaxRecordThreshold:  1000,                             // Max number of items in the cache
+	CleanNum:            100,                              // Number of items to remove when the threshold is reached
+	PollInterval:        1 * time.Second,                  // Interval to check for expired items
+}
+cache := gokachu.New[string, string](config)
+```
+
+### Working with TTL
+
+You can set a TTL for each item in the cache. If the TTL is `0`, the item will not expire.
+
+```go
+// Set a value with a 5-minute TTL.
+cache.Set("key1", "value1", 5*time.Minute)
+
+// Set a value that never expires.
+cache.Set("key2", "value2", 0)
+```
+
+### Cache Replacement Strategies
+
+Gokachu supports the following cache replacement strategies:
+
+- `ReplacementStrategyLRU`: Least Recently Used
+- `ReplacementStrategyMRU`: Most Recently Used
+- `ReplacementStrategyLFU`: Least Frequently Used
+- `ReplacementStrategyMFU`: Most Frequently Used
+- `ReplacementStrategyFIFO`: First In First Out
+- `ReplacementStrategyLIFO`: Last In First Out
+- `ReplacementStrategyNone`: No replacement (items are only removed when they expire)
+
+You can set the replacement strategy in the configuration:
+
+```go
+cache := gokachu.New[string, string](gokachu.Config{
+	ReplacementStrategy: gokachu.ReplacementStrategyLFU,
+})
+```
+
+### Using Hooks
+
+You can add hooks to execute custom functions on cache events.
+
+#### Global Hooks
+```go
+cache.AddOnSetHook(func(key, value string, ttl time.Duration) {
+    fmt.Printf("[HOOK] set -> %s with TTL %v\n", key, ttl)
+})
+
+cache.AddOnGetHook(func(key, value string) {
+    fmt.Printf("[HOOK] get -> %s\n", key)
+})
+
+cache.AddOnDeleteHook(func(key, value string) {
+    fmt.Printf("[HOOK] delete -> %s\n", key)
+})
+
+cache.AddOnMissHook(func(key string) {
+    fmt.Printf("[HOOK] miss -> %s\n", key)
+})
+```
+
+#### Individual Hooks
+You can also add hooks to individual items:
+```go
+cache.Set("my-key", "my-value", 0,
+    gokachu.WithOnGetHook(func() {
+        fmt.Println("Item retrieved!")
+    }),
+    gokachu.WithOnDeleteHook(func() {
+        fmt.Println("Item deleted!")
+    }))
+```
+
+### Other Operations
+
+Gokachu provides a rich set of methods for cache manipulation:
+
+- `Delete(key K) bool`: Deletes a value from the cache. It returns `true` if the key existed and was deleted, otherwise `false`.
+- `GetFunc(cb func(key K, value V) bool) (V, bool)`: Retrieves the first matching value.
+- `DeleteFunc(cb func(key K, value V) bool) int`: Deletes values for which the callback returns true. It returns the number of deleted items.
+- `Keys() []K`: Returns all keys in the cache.
+- `KeysFunc(cb func(key K, value V) bool) []K`: Returns keys for which the callback returns true.
+- `Count() int`: Returns the number of items in the cache.
+- `CountFunc(cb func(key K, value V) bool) int`: Returns the number of items for which the callback returns true.
+- `Flush() int`: Deletes all items from the cache.
+- `Close()`: Closes the cache and all associated resources.
+
+## Benchmark
+
+### Set
 ```bash
 goos: darwin
 goarch: arm64
@@ -113,3 +192,10 @@ PASS
 ok  	github.com/ksckaan1/gokachu	2.094s
 ```
 
+## Contributing
+
+Contributions are welcome! Please feel free to submit a pull request or open an issue.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
