@@ -18,7 +18,7 @@ func main() {
 	defer cache.Close()
 
 	// 2. Global Hooks
-	cache.AddOnSetHook(func(key, value string, ttl time.Duration) {
+	onSetId := cache.AddOnSetHook(func(key, value string, ttl time.Duration) {
 		fmt.Printf("[Global Hook] Set: key=%s, value=%s, ttl=%v\n", key, value, ttl)
 	})
 
@@ -35,6 +35,7 @@ func main() {
 	})
 
 	// 3. Set with Individual Hooks
+	fmt.Println("--- Setting initial values ---")
 	cache.Set("user:1", "John Doe", 5*time.Minute,
 		gokachu.WithOnGetHook(func() {
 			fmt.Println("[Individual Hook] Got user:1!")
@@ -74,12 +75,21 @@ func main() {
 	})
 	fmt.Printf("%d products were deleted.\n", deletedCount)
 
-	// 6. Other operations
+	// 6. Demonstrate Removing a Global Hook
+	fmt.Println("\n--- Removing the global OnSet hook ---")
+	if removed := cache.RemoveOnSetHook(onSetId); removed {
+		fmt.Println("Global OnSet hook was successfully removed.")
+	}
+	fmt.Println("Setting a new value (OnSet hook should not fire)...")
+	cache.Set("user:3", "New User", 0)
+	fmt.Println("Value for user:3 set.")
+
+	// 7. Other operations
 	fmt.Println("\n--- Final Cache State ---")
 	fmt.Println("Keys:", cache.Keys())
 	fmt.Println("Count:", cache.Count())
 
-	// 7. Flush the cache
+	// 8. Flush the cache
 	fmt.Println("\n--- Flushing the cache ---")
 	flushedCount := cache.Flush()
 	fmt.Printf("%d items were flushed from the cache.\n", flushedCount)

@@ -124,8 +124,11 @@ cache := gokachu.New[string, string](gokachu.Config{
 You can add hooks to execute custom functions on cache events.
 
 #### Global Hooks
+You can add hooks that apply to all items in the cache. The `Add...` methods return a `uint64` ID. This ID is optional but allows you to remove a specific hook later if you no longer need it to run.
+
 ```go
-cache.AddOnSetHook(func(key, value string, ttl time.Duration) {
+// Add a hook and save its ID
+onSetId := cache.AddOnSetHook(func(key, value string, ttl time.Duration) {
     fmt.Printf("[HOOK] set -> %s with TTL %v\n", key, ttl)
 })
 
@@ -133,14 +136,25 @@ cache.AddOnGetHook(func(key, value string) {
     fmt.Printf("[HOOK] get -> %s\n", key)
 })
 
-cache.AddOnDeleteHook(func(key, value string) {
-    fmt.Printf("[HOOK] delete -> %s\n", key)
-})
+// ... add other hooks
 
-cache.AddOnMissHook(func(key string) {
-    fmt.Printf("[HOOK] miss -> %s\n", key)
-})
+// If you no longer need a hook, you can remove it using its ID.
+removed := cache.RemoveOnSetHook(onSetId)
+if removed {
+    fmt.Println("OnSet hook was removed.")
+}
 ```
+
+The following methods are available for managing global hooks:
+- `AddOnSetHook(hook func(key K, value V, ttl time.Duration)) uint64`
+- `RemoveOnSetHook(id uint64) bool`
+- `AddOnGetHook(hook func(key K, value V)) uint64`
+- `RemoveOnGetHook(id uint64) bool`
+- `AddOnDeleteHook(hook func(key K, value V)) uint64`
+- `RemoveOnDeleteHook(id uint64) bool`
+- `AddOnMissHook(hook func(key K)) uint64`
+- `RemoveOnMissHook(id uint64) bool`
+
 
 #### Individual Hooks
 You can also add hooks to individual items:
