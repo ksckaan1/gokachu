@@ -12,7 +12,7 @@ import (
 func BenchmarkGokachuSetWithTTL(b *testing.B) {
 	k := New[string, string](Config{
 		ReplacementStrategy: ReplacementStrategyLRU,
-		MaxRecordTreshold:   1000,
+		MaxRecordThreshold:  1000,
 		CleanNum:            100,
 	})
 	defer k.Close()
@@ -20,19 +20,19 @@ func BenchmarkGokachuSetWithTTL(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		k.SetWithTTL(fmt.Sprint(i), "value", 30*time.Minute)
+		k.Set(fmt.Sprint(i), "value", 30*time.Minute)
 	}
 }
 
 func BenchmarkGokachuGet(b *testing.B) {
 	k := New[string, string](Config{
 		ReplacementStrategy: ReplacementStrategyLRU,
-		MaxRecordTreshold:   1000,
+		MaxRecordThreshold:  1000,
 		CleanNum:            100,
 	})
 	defer k.Close()
 
-	k.SetWithTTL("key", "value", 30*time.Minute)
+	k.Set("key", "value", 30*time.Minute)
 
 	b.ResetTimer()
 
@@ -45,13 +45,13 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 	t.Run("when reaches max record threshold, then clean", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyFIFO,
-			MaxRecordTreshold:   1000,
+			MaxRecordThreshold:  1000,
 			CleanNum:            100,
 		})
 		defer k.Close()
 
 		for i := 0; i < 1001; i++ {
-			k.Set(fmt.Sprint(i), "value")
+			k.Set(fmt.Sprint(i), "value", 0)
 		}
 
 		if k.Count() != 901 {
@@ -62,13 +62,13 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 	t.Run("when cleans, then check sort of keys by FIFO", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyFIFO,
-			MaxRecordTreshold:   10,
+			MaxRecordThreshold:  10,
 			CleanNum:            6,
 		})
 		defer k.Close()
 
 		for i := 0; i < 11; i++ {
-			k.Set(fmt.Sprint(i), "value")
+			k.Set(fmt.Sprint(i), "value", 0)
 		}
 
 		if k.Count() != 5 {
@@ -83,13 +83,13 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 	t.Run("when cleans, then check sort of keys by LIFO", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLIFO,
-			MaxRecordTreshold:   10,
+			MaxRecordThreshold:  10,
 			CleanNum:            6,
 		})
 		defer k.Close()
 
 		for i := 0; i < 11; i++ {
-			k.Set(fmt.Sprint(i), "value")
+			k.Set(fmt.Sprint(i), "value", 0)
 		}
 
 		if k.Count() != 5 {
@@ -104,20 +104,20 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 	t.Run("when cleans, then check sort of keys by LRU", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLRU,
-			MaxRecordTreshold:   10,
+			MaxRecordThreshold:  10,
 			CleanNum:            6,
 		})
 		defer k.Close()
 
 		for i := 0; i < 10; i++ {
-			k.Set(fmt.Sprint(i), "value")
+			k.Set(fmt.Sprint(i), "value", 0)
 		}
 
 		for i := 0; i < 10; i++ {
 			k.Get(fmt.Sprint(9 - i))
 		}
 
-		k.Set("10", "value")
+		k.Set("10", "value", 0)
 
 		if k.Count() != 5 {
 			t.Errorf("expected count to be 5, but got %d", k.Count())
@@ -131,20 +131,20 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 	t.Run("when cleans, then check sort of keys by MRU", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyMRU,
-			MaxRecordTreshold:   10,
+			MaxRecordThreshold:  10,
 			CleanNum:            6,
 		})
 		defer k.Close()
 
 		for i := 0; i < 10; i++ {
-			k.Set(fmt.Sprint(i), "value")
+			k.Set(fmt.Sprint(i), "value", 0)
 		}
 
 		for i := 0; i < 10; i++ {
 			k.Get(fmt.Sprint(9 - i))
 		}
 
-		k.Set("10", "value")
+		k.Set("10", "value", 0)
 
 		if k.Count() != 5 {
 			t.Errorf("expected count to be 5, but got %d", k.Count())
@@ -158,13 +158,13 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 	t.Run("when cleans, then check sort of keys by LFU", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLFU,
-			MaxRecordTreshold:   10,
+			MaxRecordThreshold:  10,
 			CleanNum:            6,
 		})
 		defer k.Close()
 
 		for i := 0; i < 10; i++ {
-			k.Set(fmt.Sprint(i), "value")
+			k.Set(fmt.Sprint(i), "value", 0)
 		}
 
 		for i := 0; i < 10; i++ {
@@ -176,7 +176,7 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 			}
 		}
 
-		k.Set("10", "value")
+		k.Set("10", "value", 0)
 
 		if k.Count() != 5 {
 			t.Errorf("expected count to be 5, but got %d", k.Count())
@@ -190,13 +190,13 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 	t.Run("when cleans, then check sort of keys by MFU", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyMFU,
-			MaxRecordTreshold:   10,
+			MaxRecordThreshold:  10,
 			CleanNum:            6,
 		})
 		defer k.Close()
 
 		for i := 0; i < 10; i++ {
-			k.Set(fmt.Sprint(i), "value")
+			k.Set(fmt.Sprint(i), "value", 0)
 		}
 
 		for i := 0; i < 10; i++ {
@@ -208,7 +208,7 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 			}
 		}
 
-		k.Set("10", "value")
+		k.Set("10", "value", 0)
 
 		for i := 0; i < 10; i++ {
 			k.Get("10")
@@ -229,8 +229,8 @@ func TestSet(t *testing.T) {
 		k := New[string, string](Config{})
 		defer k.Close()
 
-		k.Set("key", "value")
-		k.Set("key", "value") // already exists
+		k.Set("key", "value", 0)
+		k.Set("key", "value", 0) // already exists
 
 		keys := k.Keys()
 		if !reflect.DeepEqual(keys, []string{"key"}) {
@@ -241,13 +241,13 @@ func TestSet(t *testing.T) {
 	t.Run("set with lru replacement", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLRU,
-			MaxRecordTreshold:   100,
+			MaxRecordThreshold:  100,
 			CleanNum:            100,
 		})
 		defer k.Close()
 
-		k.Set("key", "value")
-		k.Set("key", "value") // already exists
+		k.Set("key", "value", 0)
+		k.Set("key", "value", 0) // already exists
 
 		keys := k.Keys()
 		if !reflect.DeepEqual(keys, []string{"key"}) {
@@ -258,13 +258,13 @@ func TestSet(t *testing.T) {
 	t.Run("set with mru replacement", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyMRU,
-			MaxRecordTreshold:   100,
+			MaxRecordThreshold:  100,
 			CleanNum:            100,
 		})
 		defer k.Close()
 
-		k.Set("key", "value")
-		k.Set("key", "value") // already exists
+		k.Set("key", "value", 0)
+		k.Set("key", "value", 0) // already exists
 
 		keys := k.Keys()
 		if !reflect.DeepEqual(keys, []string{"key"}) {
@@ -278,7 +278,7 @@ func TestGet(t *testing.T) {
 		k := New[string, string](Config{})
 		defer k.Close()
 
-		k.Set("key", "value")
+		k.Set("key", "value", 0)
 
 		v, ok := k.Get("key")
 		if !ok {
@@ -293,12 +293,12 @@ func TestGet(t *testing.T) {
 	t.Run("get with lru replacement", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLRU,
-			MaxRecordTreshold:   100,
+			MaxRecordThreshold:  100,
 			CleanNum:            100,
 		})
 		defer k.Close()
 
-		k.Set("key", "value")
+		k.Set("key", "value", 0)
 
 		v, ok := k.Get("key")
 		if !ok {
@@ -313,12 +313,12 @@ func TestGet(t *testing.T) {
 	t.Run("get with mru replacement", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyMRU,
-			MaxRecordTreshold:   100,
+			MaxRecordThreshold:  100,
 			CleanNum:            100,
 		})
 		defer k.Close()
 
-		k.Set("key", "value")
+		k.Set("key", "value", 0)
 
 		v, ok := k.Get("key")
 		if !ok {
@@ -333,12 +333,12 @@ func TestGet(t *testing.T) {
 	t.Run("get with lfu replacement", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLFU,
-			MaxRecordTreshold:   100,
+			MaxRecordThreshold:  100,
 			CleanNum:            100,
 		})
 		defer k.Close()
 
-		k.Set("key", "value")
+		k.Set("key", "value", 0)
 
 		v, ok := k.Get("key")
 		if !ok {
@@ -353,13 +353,13 @@ func TestGet(t *testing.T) {
 	t.Run("get with mfu replacement", func(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyMFU,
-			MaxRecordTreshold:   100,
+			MaxRecordThreshold:  100,
 			CleanNum:            100,
 		})
 		defer k.Close()
 
-		k.Set("key1", "value")
-		k.Set("key2", "value")
+		k.Set("key1", "value", 0)
+		k.Set("key2", "value", 0)
 
 		k.Get("key1")
 		k.Get("key2")
@@ -383,7 +383,7 @@ func TestTTL(t *testing.T) {
 		})
 		defer k.Close()
 
-		k.SetWithTTL("key", "value", 300*time.Millisecond)
+		k.Set("key", "value", 300*time.Millisecond)
 
 		if _, ok := k.Get("key"); !ok {
 			t.Errorf("expected key to exist")
@@ -401,10 +401,10 @@ func TestTTL(t *testing.T) {
 			PollInterval: 100 * time.Millisecond,
 		})
 
-		k.SetWithTTL("key1", "value", 300*time.Millisecond)
-		k.SetWithTTL("key2", "value", 5*time.Second)
-		k.Set("key3", "value")
-		k.SetWithTTL("key3", "value", 0)
+		k.Set("key1", "value", 300*time.Millisecond)
+		k.Set("key2", "value", 5*time.Second)
+		k.Set("key3", "value", 0)
+		k.Set("key3", "value", 0)
 
 		keys := k.Keys()
 		if !reflect.DeepEqual(keys, []string{"key1", "key2", "key3"}) {
@@ -439,7 +439,7 @@ func TestClose(t *testing.T) {
 		k := New[string, string](Config{})
 		k.Close()
 
-		k.Set("key", "value")
+		k.Set("key", "value", 0)
 
 		if _, ok := k.Get("key"); ok {
 			t.Errorf("expected key to be not set")
@@ -455,7 +455,7 @@ func TestClose(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	g := New[string, string](Config{})
-	g.Set("key1", "value")
+	g.Set("key1", "value", 0)
 	g.Delete("key1")
 	if _, ok := g.Get("key1"); ok {
 		t.Errorf("expected key to be not set")
@@ -465,13 +465,13 @@ func TestDelete(t *testing.T) {
 
 func TestDeleteFunc(t *testing.T) {
 	g := New[string, string](Config{})
-	g.Set("a1", "a1")
-	g.Set("a2", "a2")
-	g.Set("a3", "a3")
-	g.Set("b1", "b1")
-	g.Set("b2", "b2")
-	g.Set("b3", "b3")
-	g.Set("c1", "c1")
+	g.Set("a1", "a1", 0)
+	g.Set("a2", "a2", 0)
+	g.Set("a3", "a3", 0)
+	g.Set("b1", "b1", 0)
+	g.Set("b2", "b2", 0)
+	g.Set("b3", "b3", 0)
+	g.Set("c1", "c1", 0)
 	// delete all keys start with "a"
 	g.DeleteFunc(func(key, _ string) bool {
 		return strings.HasPrefix(key, "a")
@@ -491,13 +491,13 @@ func TestDeleteFunc(t *testing.T) {
 
 func TestKeys(t *testing.T) {
 	g := New[string, string](Config{})
-	g.Set("a1", "a1")
-	g.Set("a2", "a2")
-	g.Set("a3", "a3")
-	g.Set("b1", "b1")
-	g.Set("b2", "b2")
-	g.Set("b3", "b3")
-	g.Set("c1", "c1")
+	g.Set("a1", "a1", 0)
+	g.Set("a2", "a2", 0)
+	g.Set("a3", "a3", 0)
+	g.Set("b1", "b1", 0)
+	g.Set("b2", "b2", 0)
+	g.Set("b3", "b3", 0)
+	g.Set("c1", "c1", 0)
 	keys := g.Keys()
 	if !reflect.DeepEqual(keys, []string{"a1", "a2", "a3", "b1", "b2", "b3", "c1"}) {
 		t.Errorf("expected keys to be [a1, a2, a3, b1, b2, b3, c1], but got %v", keys)
@@ -507,13 +507,13 @@ func TestKeys(t *testing.T) {
 
 func TestKeysFunc(t *testing.T) {
 	g := New[string, string](Config{})
-	g.Set("a1", "a1")
-	g.Set("a2", "a2")
-	g.Set("a3", "a3")
-	g.Set("b1", "b1")
-	g.Set("b2", "b2")
-	g.Set("b3", "b3")
-	g.Set("c1", "c1")
+	g.Set("a1", "a1", 0)
+	g.Set("a2", "a2", 0)
+	g.Set("a3", "a3", 0)
+	g.Set("b1", "b1", 0)
+	g.Set("b2", "b2", 0)
+	g.Set("b3", "b3", 0)
+	g.Set("c1", "c1", 0)
 	keys := g.KeysFunc(func(key, _ string) bool {
 		return strings.HasPrefix(key, "a")
 	})
@@ -525,13 +525,13 @@ func TestKeysFunc(t *testing.T) {
 
 func TestCount(t *testing.T) {
 	g := New[string, string](Config{})
-	g.Set("a1", "a1")
-	g.Set("a2", "a2")
-	g.Set("a3", "a3")
-	g.Set("b1", "b1")
-	g.Set("b2", "b2")
-	g.Set("b3", "b3")
-	g.Set("c1", "c1")
+	g.Set("a1", "a1", 0)
+	g.Set("a2", "a2", 0)
+	g.Set("a3", "a3", 0)
+	g.Set("b1", "b1", 0)
+	g.Set("b2", "b2", 0)
+	g.Set("b3", "b3", 0)
+	g.Set("c1", "c1", 0)
 	count := g.Count()
 	if count != 7 {
 		t.Errorf("expected count to be 7, but got %d", count)
@@ -541,13 +541,13 @@ func TestCount(t *testing.T) {
 
 func TestCountFunc(t *testing.T) {
 	g := New[string, string](Config{})
-	g.Set("a1", "a1")
-	g.Set("a2", "a2")
-	g.Set("a3", "a3")
-	g.Set("b1", "b1")
-	g.Set("b2", "b2")
-	g.Set("b3", "b3")
-	g.Set("c1", "c1")
+	g.Set("a1", "a1", 0)
+	g.Set("a2", "a2", 0)
+	g.Set("a3", "a3", 0)
+	g.Set("b1", "b1", 0)
+	g.Set("b2", "b2", 0)
+	g.Set("b3", "b3", 0)
+	g.Set("c1", "c1", 0)
 	count := g.CountFunc(func(key, _ string) bool {
 		return strings.HasPrefix(key, "a")
 	})
@@ -559,13 +559,13 @@ func TestCountFunc(t *testing.T) {
 
 func TestFlush(t *testing.T) {
 	g := New[string, string](Config{})
-	g.Set("a1", "a1")
-	g.Set("a2", "a2")
-	g.Set("a3", "a3")
-	g.Set("b1", "b1")
-	g.Set("b2", "b2")
-	g.Set("b3", "b3")
-	g.Set("c1", "c1")
+	g.Set("a1", "a1", 0)
+	g.Set("a2", "a2", 0)
+	g.Set("a3", "a3", 0)
+	g.Set("b1", "b1", 0)
+	g.Set("b2", "b2", 0)
+	g.Set("b3", "b3", 0)
+	g.Set("c1", "c1", 0)
 	g.Flush()
 	if g.elems.Len() != 0 {
 		t.Errorf("expected elems count to be 0, but got %d", g.elems.Len())

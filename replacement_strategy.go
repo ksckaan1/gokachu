@@ -1,5 +1,7 @@
 package gokachu
 
+import "container/list"
+
 type ReplacementStrategy uint
 
 const (
@@ -12,7 +14,7 @@ const (
 	ReplacementStrategyMFU                      // Most Frequently Used
 )
 
-func (g *Gokachu[K, V]) clean() {
+func (g *Gokachu[K, V]) clear() {
 	currentElem := g.elems.Front()
 	deletedCount := 0
 	for {
@@ -24,5 +26,36 @@ func (g *Gokachu[K, V]) clean() {
 		g.elems.Remove(currentElem)
 		deletedCount++
 		currentElem = nextElem
+	}
+}
+
+func (g *Gokachu[K, V]) moveByHits(elem *list.Element) {
+	prev := elem.Prev()
+	next := elem.Next()
+
+	switch g.replacementStrategy {
+	case ReplacementStrategyLFU:
+		if prev != nil && prev.Value.(*valueWithTTL[K, V]).hitCount > elem.Value.(*valueWithTTL[K, V]).hitCount {
+			g.elems.MoveBefore(elem, prev)
+			g.moveByHits(elem)
+			return
+		}
+
+		if next != nil && next.Value.(*valueWithTTL[K, V]).hitCount < elem.Value.(*valueWithTTL[K, V]).hitCount {
+			g.elems.MoveAfter(elem, next)
+			g.moveByHits(elem)
+		}
+
+	case ReplacementStrategyMFU:
+		if prev != nil && prev.Value.(*valueWithTTL[K, V]).hitCount < elem.Value.(*valueWithTTL[K, V]).hitCount {
+			g.elems.MoveBefore(elem, prev)
+			g.moveByHits(elem)
+			return
+		}
+
+		if next != nil && next.Value.(*valueWithTTL[K, V]).hitCount > elem.Value.(*valueWithTTL[K, V]).hitCount {
+			g.elems.MoveAfter(elem, next)
+			g.moveByHits(elem)
+		}
 	}
 }
