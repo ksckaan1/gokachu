@@ -12,7 +12,7 @@ import (
 type Gokachu[K comparable, V any] struct {
 	elems               *list.List // front of list == greater risk of deletion <---------list---------> back of list == less risk of deletion
 	store               map[K]*list.Element
-	mut                 *sync.Mutex
+	mut                 *sync.RWMutex
 	maxRecordThreshold  int
 	clearNum            int
 	replacementStrategy ReplacementStrategy
@@ -40,7 +40,7 @@ func New[K comparable, V any](cfg Config) *Gokachu[K, V] {
 	g := &Gokachu[K, V]{
 		elems:               list.New(),
 		store:               make(map[K]*list.Element),
-		mut:                 new(sync.Mutex),
+		mut:                 new(sync.RWMutex),
 		maxRecordThreshold:  cfg.MaxRecordThreshold,
 		clearNum:            cfg.ClearNum,
 		replacementStrategy: cfg.ReplacementStrategy,
@@ -170,28 +170,30 @@ func (g *Gokachu[K, V]) Get(key K) (V, bool) {
 
 // GetFunc retrieves a first matching value from the cache using a callback function. If all matches return false, the second value also returns false.
 func (g *Gokachu[K, V]) GetFunc(cb func(key K, value V) bool) (V, bool) {
-	unlock := g.lock()
-	val := *new(V)
-	key := *new(K)
+	unlock := g.rlock()
+
+	var foundKey K
+
 	found := false
 
-	for key, value := range g.store {
-		if !cb(key, value.Value.(*valueWithTTL[K, V]).value) {
-			continue
+	for k, v := range g.store {
+		if cb(k, v.Value.(*valueWithTTL[K, V]).value) {
+			foundKey = k
+			found = true
+
+			break
 		}
-
-		found = true
-
-		break
 	}
 
 	unlock()
 
 	if found {
-		return g.Get(key)
+		return g.Get(foundKey)
 	}
 
-	return val, false
+	var zeroV V
+
+	return zeroV, false
 }
 
 // Delete deletes a value from the cache and returns true if the key existed.
@@ -254,7 +256,7 @@ func (g *Gokachu[K, V]) Flush() int {
 
 // Keys returns all keys in the cache.
 func (g *Gokachu[K, V]) Keys() []K {
-	defer g.lock()()
+	defer g.rlock()()
 
 	keys := make([]K, 0, len(g.store))
 
@@ -267,7 +269,7 @@ func (g *Gokachu[K, V]) Keys() []K {
 
 // KeysFunc returns all keys in the cache for which the callback returns true.
 func (g *Gokachu[K, V]) KeysFunc(cb func(key K, value V) bool) []K {
-	defer g.lock()()
+	defer g.rlock()()
 
 	keys := make([]K, 0, len(g.store))
 
@@ -282,14 +284,14 @@ func (g *Gokachu[K, V]) KeysFunc(cb func(key K, value V) bool) []K {
 
 // Count returns the number of values in the cache.
 func (g *Gokachu[K, V]) Count() int {
-	defer g.lock()()
+	defer g.rlock()()
 
 	return g.elems.Len()
 }
 
 // CountFunc returns the number of values in the cache for which the callback returns true.
 func (g *Gokachu[K, V]) CountFunc(cb func(key K, value V) bool) int {
-	defer g.lock()()
+	defer g.rlock()()
 
 	count := 0
 
@@ -304,11 +306,13 @@ func (g *Gokachu[K, V]) CountFunc(cb func(key K, value V) bool) int {
 
 // Close closes the cache and all associated resources.
 func (g *Gokachu[K, V]) Close() {
+	g.mut.Lock()
+
 	if g.pollCancel == nil {
+		g.mut.Unlock()
 		return
 	}
 
-	g.lock()()
 	close(g.pollCancel)
 	clear(g.store)
 
@@ -319,6 +323,8 @@ func (g *Gokachu[K, V]) Close() {
 	g.onMissHooks = nil
 
 	g.elems.Init()
+	g.mut.Unlock()
+
 	g.wg.Wait()
 }
 
@@ -326,4 +332,10 @@ func (k *Gokachu[K, V]) lock() func() {
 	k.mut.Lock()
 
 	return k.mut.Unlock
+}
+
+func (k *Gokachu[K, V]) rlock() func() {
+	k.mut.RLock()
+
+	return k.mut.RUnlock
 }
