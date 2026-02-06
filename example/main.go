@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ksckaan1/gokachu"
+	"github.com/ksckaan1/gokachu/v2"
 )
 
 func main() {

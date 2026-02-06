@@ -31,7 +31,7 @@ Gokachu is a powerful and easy-to-use in-memory cache library for Go. It provide
 ## 📦 Installation
 
 ```bash
-go get -u github.com/ksckaan1/gokachu@latest
+go get github.com/ksckaan1/gokachu/v2
 ```
 
 ## 💻 Usage
