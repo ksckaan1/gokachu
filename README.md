@@ -8,16 +8,16 @@
 [![Contributors](https://img.shields.io/github/contributors/ksckaan1/gokachu)](https://github.com/ksckaan1/gokachu/graphs/contributors)
 [![LICENSE](https://img.shields.io/badge/LICENCE-MIT-orange?style=flat)](./LICENSE)
 
-# Gokachu
+# 🚀 Gokachu
 
 Gokachu is a powerful and easy-to-use in-memory cache library for Go. It provides a generic, thread-safe cache with Time-To-Live (TTL) support and a variety of cache replacement strategies.
 
-## Features
+## ✨ Features
 
-- **Thread-safe:** Can be safely used in concurrent applications.
-- **Generics support:** Store any type of data.
-- **TTL (Time-To-Live) support:** Automatically remove expired items.
-- **Cache Replacement Strategies:**
+- 🔒 **Thread-safe:** Can be safely used in concurrent applications.
+- 🧬 **Generics support:** Store any type of data.
+- ⏰ **TTL (Time-To-Live) support:** Automatically remove expired items.
+- 🔄 **Cache Replacement Strategies:**
   - LRU (Least Recently Used)
   - MRU (Most Recently Used)
   - LFU (Least Frequently Used)
@@ -25,16 +25,16 @@ Gokachu is a powerful and easy-to-use in-memory cache library for Go. It provide
   - FIFO (First In First Out)
   - LIFO (Last In First Out)
   - None (no replacement)
-- **Hooks:** Execute custom functions on `Set`, `Get`, `Delete`, and `Miss` events.
-- **Flexible API:** Rich set of methods for cache manipulation.
+- 🪝 **Hooks:** Execute custom functions on `Set`, `Get`, `Delete`, and `Miss` events.
+- 🛠️ **Flexible API:** Rich set of methods for cache manipulation.
 
-## Installation
+## 📦 Installation
 
 ```bash
 go get -u github.com/ksckaan1/gokachu@latest
 ```
 
-## Usage
+## 💻 Usage
 
 ### Basic Example
 
@@ -73,7 +73,7 @@ func main() {
 }
 ```
 
-### Configuration
+### ⚙️ Configuration
 
 You can configure the cache using the `gokachu.Config` struct:
 
@@ -87,7 +87,7 @@ config := gokachu.Config{
 cache := gokachu.New[string, string](config)
 ```
 
-### Working with TTL
+### ⏱️ Working with TTL
 
 You can set a TTL for each item in the cache. If the TTL is `0`, the item will not expire.
 
@@ -99,7 +99,7 @@ cache.Set("key1", "value1", 5*time.Minute)
 cache.Set("key2", "value2", 0)
 ```
 
-### Cache Replacement Strategies
+### 🗂️ Cache Replacement Strategies
 
 Gokachu supports the following cache replacement strategies:
 
@@ -119,11 +119,11 @@ cache := gokachu.New[string, string](gokachu.Config{
 })
 ```
 
-### Using Hooks
+### 🪝 Using Hooks
 
 You can add hooks to execute custom functions on cache events.
 
-#### Global Hooks
+#### 🌐 Global Hooks
 You can add hooks that apply to all items in the cache. The `Add...` methods return a `uint64` ID. This ID is optional but allows you to remove a specific hook later if you no longer need it to run.
 
 ```go
@@ -156,7 +156,7 @@ The following methods are available for managing global hooks:
 - `RemoveOnMissHook(id uint64) bool`
 
 
-#### Individual Hooks
+#### 🎯 Individual Hooks
 You can also add hooks to individual items:
 ```go
 cache.Set("my-key", "my-value", 0,
@@ -168,7 +168,7 @@ cache.Set("my-key", "my-value", 0,
     }))
 ```
 
-### Other Operations
+### 🔧 Other Operations
 
 Gokachu provides a rich set of methods for cache manipulation:
 
@@ -182,7 +182,7 @@ Gokachu provides a rich set of methods for cache manipulation:
 - `Flush() int`: Deletes all items from the cache.
 - `Close()`: Closes the cache and all associated resources.
 
-## Benchmark
+## 📊 Benchmark
 ```bash
 go test -bench=. -benchmem -cpu=1,4,8 -count=1 ./...
 goos: darwin
@@ -205,10 +205,10 @@ BenchmarkGokachu_InsertEvict-8   	 9836367	       122.3 ns/op	     112 B/op	    
 >
 > Gokachu uses linked lists to maintain the order of items in the cache. And uses a map to store the key-value pairs. (linked list + map = 2 allocs/op)
 
-## Contributing
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a pull request or open an issue.
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
