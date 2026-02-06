@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ["1.25", "1.26"]
+        go-version: ["1.25"]
 
     steps:
       - name: Checkout code
