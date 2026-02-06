@@ -2,8 +2,8 @@
 
 [![release](https://img.shields.io/github/release/ksckaan1/gokachu.svg)](https://github.com/ksckaan1/gokachu/releases)
 ![Go Version](https://img.shields.io/badge/Go-%3E%3D%201.25-%23007d9c)
-[![GoDoc](https://godoc.org/github.com/ksckaan1/gokachu?status.svg)](https://pkg.go.dev/github.com/ksckaan1/gokachu)
-[![Go report](https://goreportcard.com/badge/github.com/ksckaan1/gokachu)](https://goreportcard.com/report/github.com/ksckaan1/gokachu)
+[![GoDoc](https://godoc.org/github.com/ksckaan1/gokachu/v2?status.svg)](https://pkg.go.dev/github.com/ksckaan1/gokachu/v2)
+[![Go report](https://goreportcard.com/badge/github.com/ksckaan1/gokachu/v2)](https://goreportcard.com/report/github.com/ksckaan1/gokachu/v2)
 ![m2s](https://img.shields.io/badge/coverage-95.9%25-green?style=flat)
 [![Contributors](https://img.shields.io/github/contributors/ksckaan1/gokachu)](https://github.com/ksckaan1/gokachu/graphs/contributors)
 [![LICENSE](https://img.shields.io/badge/LICENCE-MIT-orange?style=flat)](./LICENSE)
