@@ -53,7 +53,7 @@ func main() {
 	cache := gokachu.New[string, string](gokachu.Config{
 		ReplacementStrategy: gokachu.ReplacementStrategyLRU,
 		MaxRecordThreshold:  1000, // When it reaches 1000 records,
-		CleanNum:            100,  // Cleans 100 records.
+		ClearNum:            100,  // Clears 100 records.
 	})
 	defer cache.Close()
 
@@ -81,7 +81,7 @@ You can configure the cache using the `gokachu.Config` struct:
 config := gokachu.Config{
 	ReplacementStrategy: gokachu.ReplacementStrategyLRU, // Eviction policy
 	MaxRecordThreshold:  1000,                             // Max number of items in the cache
-	CleanNum:            100,                              // Number of items to remove when the threshold is reached
+	ClearNum:            100,                              // Number of items to remove when the threshold is reached
 	PollInterval:        1 * time.Second,                  // Interval to check for expired items
 }
 cache := gokachu.New[string, string](config)
@@ -183,28 +183,27 @@ Gokachu provides a rich set of methods for cache manipulation:
 - `Close()`: Closes the cache and all associated resources.
 
 ## Benchmark
-
-### Set
 ```bash
+go test -bench=. -benchmem -cpu=1,4,8 -count=1 ./...
 goos: darwin
 goarch: arm64
 pkg: github.com/ksckaan1/gokachu
-BenchmarkGokachuSetWithTTL
-BenchmarkGokachuSetWithTTL-8   	 4838650	       236.8 ns/op	     129 B/op	       4 allocs/op
-PASS
-ok  	github.com/ksckaan1/gokachu	1.842s
+cpu: Apple M1
+BenchmarkGokachu_Update          	65431836	        18.45 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGokachu_Update-4        	66597445	        18.27 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGokachu_Update-8        	66246644	        18.26 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGokachu_Get             	59910507	        18.88 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGokachu_Get-4           	60979225	        19.51 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGokachu_Get-8           	64043548	        18.88 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGokachu_InsertEvict     	 7994718	       150.8 ns/op	     112 B/op	       2 allocs/op
+BenchmarkGokachu_InsertEvict-4   	 9672381	       121.8 ns/op	     112 B/op	       2 allocs/op
+BenchmarkGokachu_InsertEvict-8   	 9836367	       122.3 ns/op	     112 B/op	       2 allocs/op
 ```
 
-### Get
-```bash
-goos: darwin
-goarch: arm64
-pkg: github.com/ksckaan1/gokachu
-BenchmarkGokachuGet
-BenchmarkGokachuGet-8   	83910825	        13.98 ns/op	       0 B/op	       0 allocs/op
-PASS
-ok  	github.com/ksckaan1/gokachu	2.094s
-```
+> [!NOTE]
+> There are 2 allocs/op in the InsertEvict benchmark. Because the cache is full, it needs to evict an item before inserting a new one. This is expected behavior.
+>
+> Gokachu uses linked lists to maintain the order of items in the cache. And uses a map to store the key-value pairs. (linked list + map = 2 allocs/op)
 
 ## Contributing
 
