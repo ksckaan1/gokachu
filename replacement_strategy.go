@@ -18,7 +18,7 @@ func (g *Gokachu[K, V]) clear() {
 	currentElem := g.elems.Front()
 	deletedCount := 0
 	for {
-		if deletedCount >= g.cleanNum || currentElem == nil {
+		if deletedCount >= g.clearNum || currentElem == nil {
 			break
 		}
 		delete(g.store, currentElem.Value.(*valueWithTTL[K, V]).key)

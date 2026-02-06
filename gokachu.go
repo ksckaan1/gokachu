@@ -14,7 +14,7 @@ type Gokachu[K comparable, V any] struct {
 	store               map[K]*list.Element
 	mut                 *sync.Mutex
 	maxRecordThreshold  int
-	cleanNum            int
+	clearNum            int
 	replacementStrategy ReplacementStrategy
 	pollInterval        time.Duration
 	pollCancel          chan struct{}
@@ -31,7 +31,7 @@ type Gokachu[K comparable, V any] struct {
 type Config struct {
 	ReplacementStrategy ReplacementStrategy // default: ReplacementStrategyNone
 	MaxRecordThreshold  int                 // This parameter is used to control the maximum number of records in the cache. If the number of records exceeds this threshold, records will be deleted according to the replacement strategy.
-	CleanNum            int                 // This parameter is used to control the number of records to be deleted.
+	ClearNum            int                 // This parameter is used to control the number of records to be deleted.
 	PollInterval        time.Duration       // This parameter is used to control the polling interval. If value is 0, uses default = 1 second.
 }
 
@@ -42,7 +42,7 @@ func New[K comparable, V any](cfg Config) *Gokachu[K, V] {
 		store:               make(map[K]*list.Element),
 		mut:                 new(sync.Mutex),
 		maxRecordThreshold:  cfg.MaxRecordThreshold,
-		cleanNum:            cfg.CleanNum,
+		clearNum:            cfg.ClearNum,
 		replacementStrategy: cfg.ReplacementStrategy,
 		pollInterval:        cmp.Or(cfg.PollInterval, time.Second), // Default poll interval is 1 second
 		pollCancel:          make(chan struct{}),
@@ -71,13 +71,40 @@ func (g *Gokachu[K, V]) Set(key K, v V, ttl time.Duration, hooks ...Hook) {
 
 	g.runOnSetHooks(key, v, ttl)
 
-	if g.maxRecordThreshold > 0 && g.cleanNum > 0 && g.replacementStrategy > ReplacementStrategyNone && len(g.store) >= g.maxRecordThreshold {
-		g.clear()
-	}
-
 	exp := time.Time{}
 	if ttl > 0 {
 		exp = time.Now().Add(ttl)
+	}
+
+	// if exists
+	if oldElem, ok := g.store[key]; ok {
+		oldElem.Value.(*valueWithTTL[K, V]).value = v
+		oldElem.Value.(*valueWithTTL[K, V]).expireTime = exp
+
+		// set individual hooks
+		for _, hook := range hooks {
+			if hook.OnGet != nil {
+				oldElem.Value.(*valueWithTTL[K, V]).hook.OnGet = hook.OnGet
+			}
+			if hook.OnDelete != nil {
+				oldElem.Value.(*valueWithTTL[K, V]).hook.OnDelete = hook.OnDelete
+			}
+		}
+
+		switch g.replacementStrategy {
+		case ReplacementStrategyLRU:
+			g.elems.MoveToBack(oldElem)
+		case ReplacementStrategyMRU:
+			g.elems.MoveToFront(oldElem)
+		}
+		return
+	}
+
+	// if not exists
+
+	// clear if cache is full
+	if g.maxRecordThreshold > 0 && g.clearNum > 0 && g.replacementStrategy > ReplacementStrategyNone && len(g.store) >= g.maxRecordThreshold {
+		g.clear()
 	}
 
 	value := &valueWithTTL[K, V]{
@@ -96,19 +123,6 @@ func (g *Gokachu[K, V]) Set(key K, v V, ttl time.Duration, hooks ...Hook) {
 		}
 	}
 
-	// if exists
-	if oldElem, ok := g.store[key]; ok {
-		oldElem.Value = value
-		switch g.replacementStrategy {
-		case ReplacementStrategyLRU:
-			g.elems.MoveToBack(oldElem)
-		case ReplacementStrategyMRU:
-			g.elems.MoveToFront(oldElem)
-		}
-		return
-	}
-
-	// if not exists
 	switch g.replacementStrategy {
 	case ReplacementStrategyFIFO, ReplacementStrategyLRU, ReplacementStrategyLFU, ReplacementStrategyMFU, ReplacementStrategyNone:
 		g.store[key] = g.elems.PushBack(value)

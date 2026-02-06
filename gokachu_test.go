@@ -9,26 +9,26 @@ import (
 	"time"
 )
 
-func BenchmarkGokachuSetWithTTL(b *testing.B) {
-	k := New[string, string](Config{
+func BenchmarkGokachu_Update(b *testing.B) {
+	k := New[int, int](Config{
 		ReplacementStrategy: ReplacementStrategyLRU,
 		MaxRecordThreshold:  1000,
-		CleanNum:            100,
+		ClearNum:            100,
 	})
 	defer k.Close()
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		k.Set(fmt.Sprint(i), "value", 30*time.Minute)
+	for b.Loop() {
+		k.Set(0, 0, 0)
 	}
 }
 
-func BenchmarkGokachuGet(b *testing.B) {
+func BenchmarkGokachu_Get(b *testing.B) {
 	k := New[string, string](Config{
 		ReplacementStrategy: ReplacementStrategyLRU,
 		MaxRecordThreshold:  1000,
-		CleanNum:            100,
+		ClearNum:            100,
 	})
 	defer k.Close()
 
@@ -36,8 +36,29 @@ func BenchmarkGokachuGet(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		k.Get("key")
+	}
+}
+
+func BenchmarkGokachu_InsertEvict(b *testing.B) {
+	const capacity = 1000
+
+	k := New[int, int](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+		MaxRecordThreshold:  capacity,
+		ClearNum:            1,
+	})
+	defer k.Close()
+
+	for i := range capacity {
+		k.Set(i, i, 0)
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		k.Set(i+capacity, 0, 0)
 	}
 }
 
@@ -46,7 +67,7 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyFIFO,
 			MaxRecordThreshold:  1000,
-			CleanNum:            100,
+			ClearNum:            100,
 		})
 		defer k.Close()
 
@@ -63,7 +84,7 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyFIFO,
 			MaxRecordThreshold:  10,
-			CleanNum:            6,
+			ClearNum:            6,
 		})
 		defer k.Close()
 
@@ -84,7 +105,7 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLIFO,
 			MaxRecordThreshold:  10,
-			CleanNum:            6,
+			ClearNum:            6,
 		})
 		defer k.Close()
 
@@ -105,7 +126,7 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLRU,
 			MaxRecordThreshold:  10,
-			CleanNum:            6,
+			ClearNum:            6,
 		})
 		defer k.Close()
 
@@ -132,7 +153,7 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyMRU,
 			MaxRecordThreshold:  10,
-			CleanNum:            6,
+			ClearNum:            6,
 		})
 		defer k.Close()
 
@@ -159,7 +180,7 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLFU,
 			MaxRecordThreshold:  10,
-			CleanNum:            6,
+			ClearNum:            6,
 		})
 		defer k.Close()
 
@@ -191,7 +212,7 @@ func TestGokachuReplacementStrategies(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyMFU,
 			MaxRecordThreshold:  10,
-			CleanNum:            6,
+			ClearNum:            6,
 		})
 		defer k.Close()
 
@@ -242,7 +263,7 @@ func TestSet(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLRU,
 			MaxRecordThreshold:  100,
-			CleanNum:            100,
+			ClearNum:            100,
 		})
 		defer k.Close()
 
@@ -259,7 +280,7 @@ func TestSet(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyMRU,
 			MaxRecordThreshold:  100,
-			CleanNum:            100,
+			ClearNum:            100,
 		})
 		defer k.Close()
 
@@ -294,7 +315,7 @@ func TestGet(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLRU,
 			MaxRecordThreshold:  100,
-			CleanNum:            100,
+			ClearNum:            100,
 		})
 		defer k.Close()
 
@@ -314,7 +335,7 @@ func TestGet(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyMRU,
 			MaxRecordThreshold:  100,
-			CleanNum:            100,
+			ClearNum:            100,
 		})
 		defer k.Close()
 
@@ -334,7 +355,7 @@ func TestGet(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyLFU,
 			MaxRecordThreshold:  100,
-			CleanNum:            100,
+			ClearNum:            100,
 		})
 		defer k.Close()
 
@@ -354,7 +375,7 @@ func TestGet(t *testing.T) {
 		k := New[string, string](Config{
 			ReplacementStrategy: ReplacementStrategyMFU,
 			MaxRecordThreshold:  100,
-			CleanNum:            100,
+			ClearNum:            100,
 		})
 		defer k.Close()
 
@@ -415,7 +436,7 @@ func TestTTL(t *testing.T) {
 		time.Sleep(400 * time.Millisecond)
 
 		keys = k.Keys()
-		if !reflect.DeepEqual(keys, []string{"key3"}) {
+		if !reflect.DeepEqual(keys, []string{"key2", "key3"}) {
 			t.Errorf("expected keys to be [key2, key3], but got %v", keys)
 		}
 
