@@ -12,10 +12,12 @@ func (g *Gokachu[K, V]) poll() {
 		case <-g.pollCancel: // when Close method called, polling stops
 			g.pollCancel = nil
 			g.wg.Done()
+
 			return
 
 		case <-ticker.C:
 			g.mut.Lock()
+
 			now := time.Now()
 
 			for key := range g.store {

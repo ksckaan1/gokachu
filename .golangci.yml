@@ -1,0 +1,18 @@
+version: "2"
+
+run:
+  timeout: 5m
+  relative-path-mode: gomod
+  tests: false
+  allow-parallel-runners: true
+  allow-serial-runners: true
+  go: "1.25.5"
+  concurrency: 4
+
+linters:
+  enable:
+    - wsl_v5
+  settings:
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false

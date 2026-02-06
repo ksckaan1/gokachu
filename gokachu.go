@@ -56,6 +56,7 @@ func New[K comparable, V any](cfg Config) *Gokachu[K, V] {
 	}
 
 	g.wg.Add(1)
+
 	go g.poll()
 
 	return g
@@ -86,6 +87,7 @@ func (g *Gokachu[K, V]) Set(key K, v V, ttl time.Duration, hooks ...Hook) {
 			if hook.OnGet != nil {
 				oldElem.Value.(*valueWithTTL[K, V]).hook.OnGet = hook.OnGet
 			}
+
 			if hook.OnDelete != nil {
 				oldElem.Value.(*valueWithTTL[K, V]).hook.OnDelete = hook.OnDelete
 			}
@@ -97,6 +99,7 @@ func (g *Gokachu[K, V]) Set(key K, v V, ttl time.Duration, hooks ...Hook) {
 		case ReplacementStrategyMRU:
 			g.elems.MoveToFront(oldElem)
 		}
+
 		return
 	}
 
@@ -118,6 +121,7 @@ func (g *Gokachu[K, V]) Set(key K, v V, ttl time.Duration, hooks ...Hook) {
 		if hook.OnGet != nil {
 			value.hook.OnGet = hook.OnGet
 		}
+
 		if hook.OnDelete != nil {
 			value.hook.OnDelete = hook.OnDelete
 		}
@@ -150,11 +154,13 @@ func (g *Gokachu[K, V]) Get(key K) (V, bool) {
 		g.elems.MoveToFront(item)
 	case ReplacementStrategyMFU, ReplacementStrategyLFU:
 		value.hitCount++
+
 		g.moveByHits(item)
 	}
 
 	// run hooks before getting value
 	g.runOnGetHooks(key, value.value)
+
 	if value.hook.OnGet != nil {
 		value.hook.OnGet()
 	}
@@ -173,9 +179,12 @@ func (g *Gokachu[K, V]) GetFunc(cb func(key K, value V) bool) (V, bool) {
 		if !cb(key, value.Value.(*valueWithTTL[K, V]).value) {
 			continue
 		}
+
 		found = true
+
 		break
 	}
+
 	unlock()
 
 	if found {
@@ -193,6 +202,7 @@ func (g *Gokachu[K, V]) Delete(key K) bool {
 	if ok {
 		// run hooks before delete
 		g.runOnDeleteHooks(key, value.Value.(*valueWithTTL[K, V]).value)
+
 		if value.Value.(*valueWithTTL[K, V]).hook.OnDelete != nil {
 			value.Value.(*valueWithTTL[K, V]).hook.OnDelete()
 		}
@@ -201,6 +211,7 @@ func (g *Gokachu[K, V]) Delete(key K) bool {
 		g.elems.Remove(value)
 		delete(g.store, key)
 	}
+
 	return ok
 }
 
@@ -214,6 +225,7 @@ func (g *Gokachu[K, V]) DeleteFunc(cb func(key K, value V) bool) int {
 		if cb(key, value.Value.(*valueWithTTL[K, V]).value) {
 			// run hooks before delete
 			g.runOnDeleteHooks(key, value.Value.(*valueWithTTL[K, V]).value)
+
 			if value.Value.(*valueWithTTL[K, V]).hook.OnDelete != nil {
 				value.Value.(*valueWithTTL[K, V]).hook.OnDelete()
 			}
@@ -221,9 +233,11 @@ func (g *Gokachu[K, V]) DeleteFunc(cb func(key K, value V) bool) int {
 			// delete
 			g.elems.Remove(value)
 			delete(g.store, key)
+
 			count++
 		}
 	}
+
 	return count
 }
 

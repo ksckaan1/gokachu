@@ -51,6 +51,7 @@ func main() {
 
 	// Get a value to trigger the OnGet hooks
 	fmt.Println("\n--- Getting user:1 ---")
+
 	value, found := cache.Get("user:1")
 	if found {
 		fmt.Printf("Got value: %s\n", value)
@@ -58,6 +59,7 @@ func main() {
 
 	// 4. Demonstrate Delete return value
 	fmt.Println("\n--- Deleting user:1 ---")
+
 	if deleted := cache.Delete("user:1"); deleted {
 		fmt.Println("`user:1` was successfully deleted.")
 	} else {
@@ -70,6 +72,7 @@ func main() {
 
 	// 5. Demonstrate DeleteFunc return value
 	fmt.Println("\n--- Deleting all products ---")
+
 	deletedCount := cache.DeleteFunc(func(key, value string) bool {
 		return strings.HasPrefix(key, "product:")
 	})
@@ -77,9 +80,11 @@ func main() {
 
 	// 6. Demonstrate Removing a Global Hook
 	fmt.Println("\n--- Removing the global OnSet hook ---")
+
 	if removed := cache.RemoveOnSetHook(onSetId); removed {
 		fmt.Println("Global OnSet hook was successfully removed.")
 	}
+
 	fmt.Println("Setting a new value (OnSet hook should not fire)...")
 	cache.Set("user:3", "New User", 0)
 	fmt.Println("Value for user:3 set.")
@@ -91,6 +96,7 @@ func main() {
 
 	// 8. Flush the cache
 	fmt.Println("\n--- Flushing the cache ---")
+
 	flushedCount := cache.Flush()
 	fmt.Printf("%d items were flushed from the cache.\n", flushedCount)
 	fmt.Println("Keys after flush:", cache.Keys())

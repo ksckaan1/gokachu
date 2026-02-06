@@ -5,6 +5,7 @@ import "time"
 func (g *Gokachu[K, V]) AddOnSetHook(hook func(key K, value V, ttl time.Duration)) uint64 {
 	id := g.inc.Add(1)
 	g.onSetHooks[id] = hook
+
 	return id
 }
 
@@ -13,6 +14,7 @@ func (g *Gokachu[K, V]) RemoveOnSetHook(id uint64) bool {
 	if ok {
 		delete(g.onSetHooks, id)
 	}
+
 	return ok
 }
 
@@ -25,6 +27,7 @@ func (g *Gokachu[K, V]) runOnSetHooks(key K, value V, ttl time.Duration) {
 func (g *Gokachu[K, V]) AddOnGetHook(hook func(key K, value V)) uint64 {
 	id := g.inc.Add(1)
 	g.onGetHooks[id] = hook
+
 	return id
 }
 
@@ -33,6 +36,7 @@ func (g *Gokachu[K, V]) RemoveOnGetHook(id uint64) bool {
 	if ok {
 		delete(g.onGetHooks, id)
 	}
+
 	return ok
 }
 
@@ -45,6 +49,7 @@ func (g *Gokachu[K, V]) runOnGetHooks(key K, value V) {
 func (g *Gokachu[K, V]) AddOnMissHook(hook func(key K)) uint64 {
 	id := g.inc.Add(1)
 	g.onMissHooks[id] = hook
+
 	return id
 }
 
@@ -53,6 +58,7 @@ func (g *Gokachu[K, V]) RemoveOnMissHook(id uint64) bool {
 	if ok {
 		delete(g.onMissHooks, id)
 	}
+
 	return ok
 }
 
@@ -65,6 +71,7 @@ func (g *Gokachu[K, V]) runOnMissHooks(key K) {
 func (g *Gokachu[K, V]) AddOnDeleteHook(hook func(key K, value V)) uint64 {
 	id := g.inc.Add(1)
 	g.onDeleteHooks[id] = hook
+
 	return id
 }
 
@@ -73,6 +80,7 @@ func (g *Gokachu[K, V]) RemoveOnDeleteHook(id uint64) bool {
 	if ok {
 		delete(g.onDeleteHooks, id)
 	}
+
 	return ok
 }
 
