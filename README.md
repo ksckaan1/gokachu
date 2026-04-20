@@ -45,7 +45,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ksckaan1/gokachu"
+	"github.com/ksckaan1/gokachu/v2"
 )
 
 func main() {
@@ -124,6 +124,7 @@ cache := gokachu.New[string, string](gokachu.Config{
 You can add hooks to execute custom functions on cache events.
 
 #### 🌐 Global Hooks
+
 You can add hooks that apply to all items in the cache. The `Add...` methods return a `uint64` ID. This ID is optional but allows you to remove a specific hook later if you no longer need it to run.
 
 ```go
@@ -146,6 +147,7 @@ if removed {
 ```
 
 The following methods are available for managing global hooks:
+
 - `AddOnSetHook(hook func(key K, value V, ttl time.Duration)) uint64`
 - `RemoveOnSetHook(id uint64) bool`
 - `AddOnGetHook(hook func(key K, value V)) uint64`
@@ -155,9 +157,10 @@ The following methods are available for managing global hooks:
 - `AddOnMissHook(hook func(key K)) uint64`
 - `RemoveOnMissHook(id uint64) bool`
 
-
 #### 🎯 Individual Hooks
+
 You can also add hooks to individual items:
+
 ```go
 cache.Set("my-key", "my-value", 0,
     gokachu.WithOnGetHook(func() {
@@ -183,6 +186,7 @@ Gokachu provides a rich set of methods for cache manipulation:
 - `Close()`: Closes the cache and all associated resources.
 
 ## 📊 Benchmark
+
 ```bash
 go test -bench=. -benchmem -cpu=1,4,8 -count=1 ./...
 goos: darwin
