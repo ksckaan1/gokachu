@@ -168,6 +168,21 @@ func (g *Gokachu[K, V]) Get(key K) (V, bool) {
 	return value.value, true
 }
 
+// GetAs retrieves a value from the cache and converts it to the specified type. Returns false in second value if the key does not exist.
+func (g *Gokachu[K, V]) GetAs[V2 any](key K) (V2, bool) {
+	value, ok := g.Get(key)
+	if !ok {
+		return *new(V2), false
+	}
+
+	switch v := any(value).(type) {
+	case V2:
+		return v, true
+	default:
+		return *new(V2), false
+	}
+}
+
 // GetFunc retrieves a first matching value from the cache using a callback function. If all matches return false, the second value also returns false.
 func (g *Gokachu[K, V]) GetFunc(cb func(key K, value V) bool) (V, bool) {
 	unlock := g.rlock()

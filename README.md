@@ -1,7 +1,7 @@
 ![gokachu](./doc/gokachu.png)
 
 [![release](https://img.shields.io/github/release/ksckaan1/gokachu.svg)](https://github.com/ksckaan1/gokachu/releases)
-![Go Version](https://img.shields.io/badge/Go-%3E%3D%201.25-%23007d9c)
+![Go Version](https://img.shields.io/badge/Go-%3E%3D%201.27-%23007d9c)
 [![GoDoc](https://godoc.org/github.com/ksckaan1/gokachu/v2?status.svg)](https://pkg.go.dev/github.com/ksckaan1/gokachu/v2)
 [![Go report](https://goreportcard.com/badge/github.com/ksckaan1/gokachu/v2)](https://goreportcard.com/report/github.com/ksckaan1/gokachu/v2)
 ![m2s](https://img.shields.io/badge/coverage-95.9%25-green?style=flat)
@@ -176,6 +176,7 @@ cache.Set("my-key", "my-value", 0,
 Gokachu provides a rich set of methods for cache manipulation:
 
 - `Delete(key K) bool`: Deletes a value from the cache. It returns `true` if the key existed and was deleted, otherwise `false`.
+- `GetAs[V2 any](key K) (V2, bool)`: Retrieves a value and converts it to the specified type. Useful when the cache stores `any` type values.
 - `GetFunc(cb func(key K, value V) bool) (V, bool)`: Retrieves the first matching value.
 - `DeleteFunc(cb func(key K, value V) bool) int`: Deletes values for which the callback returns true. It returns the number of deleted items.
 - `Keys() []K`: Returns all keys in the cache.

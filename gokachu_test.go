@@ -596,3 +596,29 @@ func TestFlush(t *testing.T) {
 	}
 	g.Close()
 }
+
+func TestGetAs(t *testing.T) {
+	type Example struct {
+		Name string
+		Age  int
+	}
+
+	g := New[string, any](Config{})
+	g.Set("a1", Example{Name: "John", Age: 30}, 0)
+
+	v, ok := g.Get("a1")
+	if !ok {
+		t.Errorf("expected ok to be true, but got false")
+	}
+	if _, ok := v.(Example); !ok {
+		t.Errorf("expected v to be of type Example, but got %T", v)
+	}
+
+	v2, ok := g.GetAs[Example]("a1")
+	if !ok {
+		t.Errorf("expected ok to be true, but got false")
+	}
+	if v2 != (Example{Name: "John", Age: 30}) {
+		t.Errorf("expected v2 to be of type Example, but got %T", v2)
+	}
+}
