@@ -6,7 +6,7 @@ run:
   tests: false
   allow-parallel-runners: true
   allow-serial-runners: true
-  go: "1.25.5"
+  go: "1.27"
   concurrency: 4
 
 linters:
