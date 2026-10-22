@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -60,6 +62,385 @@ func BenchmarkGokachu_InsertEvict(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		k.Set(i+capacity, 0, 0)
 	}
+}
+
+func BenchmarkGokachu_GetParallel(b *testing.B) {
+	const capacity = 100_000
+
+	k := New[int, int](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+		MaxRecordThreshold:  0,
+		ClearNum:            0,
+	})
+	defer k.Close()
+
+	for i := range capacity {
+		k.Set(i, i, 0)
+	}
+
+	var goroutineID atomic.Int64
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		i := int(goroutineID.Add(1)-1) * 1000
+		for pb.Next() {
+			k.Get(i % capacity)
+			i++
+		}
+	})
+}
+
+func BenchmarkGokachu_UpdateParallel(b *testing.B) {
+	const capacity = 100_000
+
+	k := New[int, int](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+		MaxRecordThreshold:  0,
+		ClearNum:            0,
+	})
+	defer k.Close()
+
+	for i := range capacity {
+		k.Set(i, i, 0)
+	}
+
+	var goroutineID atomic.Int64
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		i := int(goroutineID.Add(1)-1) * 1000
+		for pb.Next() {
+			k.Set(i%capacity, i, 0)
+			i++
+		}
+	})
+}
+
+func BenchmarkGokachu_GetParallelSharded(b *testing.B) {
+	const (
+		capacity = 100_000
+		shards   = 64
+	)
+
+	k := NewSharded[int, int](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+		MaxRecordThreshold:  0,
+		ClearNum:            0,
+	}, shards)
+	defer k.Close()
+
+	for i := range capacity {
+		k.Set(i, i, 0)
+	}
+
+	var goroutineID atomic.Int64
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		i := int(goroutineID.Add(1)-1) * 1000
+		for pb.Next() {
+			k.Get(i % capacity)
+			i++
+		}
+	})
+}
+
+func BenchmarkGokachu_UpdateParallelSharded(b *testing.B) {
+	const (
+		capacity = 100_000
+		shards   = 64
+	)
+
+	k := NewSharded[int, int](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+		MaxRecordThreshold:  0,
+		ClearNum:            0,
+	}, shards)
+	defer k.Close()
+
+	for i := range capacity {
+		k.Set(i, i, 0)
+	}
+
+	var goroutineID atomic.Int64
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		i := int(goroutineID.Add(1)-1) * 1000
+		for pb.Next() {
+			k.Set(i%capacity, i, 0)
+			i++
+		}
+	})
+}
+
+func BenchmarkGokachu_GetMiss(b *testing.B) {
+	k := New[int, int](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+	})
+	defer k.Close()
+
+	b.ResetTimer()
+
+	for i := 0; b.Loop(); i++ {
+		k.Get(i)
+	}
+}
+
+func BenchmarkGokachu_Delete(b *testing.B) {
+	k := New[int, int](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+	})
+	defer k.Close()
+
+	b.ResetTimer()
+
+	for i := 0; b.Loop(); i++ {
+		k.Set(i, i, 0)
+		k.Delete(i)
+	}
+}
+
+func BenchmarkGokachu_GetStrategies(b *testing.B) {
+	const capacity = 1000
+
+	strategies := []struct {
+		name  string
+		value ReplacementStrategy
+	}{
+		{"None", ReplacementStrategyNone},
+		{"LRU", ReplacementStrategyLRU},
+		{"MRU", ReplacementStrategyMRU},
+		{"FIFO", ReplacementStrategyFIFO},
+		{"LIFO", ReplacementStrategyLIFO},
+		{"LFU", ReplacementStrategyLFU},
+		{"MFU", ReplacementStrategyMFU},
+	}
+
+	for _, strategy := range strategies {
+		b.Run(strategy.name, func(b *testing.B) {
+			k := New[int, int](Config{
+				ReplacementStrategy: strategy.value,
+			})
+			defer k.Close()
+
+			for i := range capacity {
+				k.Set(i, i, 0)
+			}
+
+			b.ResetTimer()
+
+			for i := 0; b.Loop(); i++ {
+				k.Get(i % capacity)
+			}
+		})
+	}
+}
+
+func BenchmarkGokachu_MixedParallel(b *testing.B) {
+	const capacity = 100_000
+
+	k := New[int, int](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+	})
+	defer k.Close()
+
+	for i := range capacity {
+		k.Set(i, i, 0)
+	}
+
+	var goroutineID atomic.Int64
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		i := int(goroutineID.Add(1)-1) * 1000
+		for pb.Next() {
+			key := i % capacity
+			if i%10 == 0 {
+				k.Set(key, i, 0)
+			} else {
+				k.Get(key)
+			}
+
+			i++
+		}
+	})
+}
+
+func BenchmarkGokachu_MixedParallelSharded(b *testing.B) {
+	const (
+		capacity = 100_000
+		shards   = 64
+	)
+
+	k := NewSharded[int, int](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+	}, shards)
+	defer k.Close()
+
+	for i := range capacity {
+		k.Set(i, i, 0)
+	}
+
+	var goroutineID atomic.Int64
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		i := int(goroutineID.Add(1)-1) * 1000
+		for pb.Next() {
+			key := i % capacity
+			if i%10 == 0 {
+				k.Set(key, i, 0)
+			} else {
+				k.Get(key)
+			}
+
+			i++
+		}
+	})
+}
+
+func TestSharding(t *testing.T) {
+	const shards = 8
+
+	g := NewSharded[int, string](Config{}, shards)
+	defer g.Close()
+
+	for i := 0; i < 1000; i++ {
+		g.Set(i, fmt.Sprint(i), 0)
+	}
+
+	if got := g.Count(); got != 1000 {
+		t.Fatalf("expected count to be 1000, but got %d", got)
+	}
+
+	usedShards := 0
+
+	for i := range g.shards {
+		if len(g.shards[i].store) > 0 {
+			usedShards++
+		}
+	}
+
+	if usedShards != shards {
+		t.Errorf("expected all %d shards to be used, but got %d", shards, usedShards)
+	}
+
+	for i := 0; i < 1000; i++ {
+		v, ok := g.Get(i)
+		if !ok || v != fmt.Sprint(i) {
+			t.Fatalf("expected key %d to be %q, but got %q (ok=%v)", i, fmt.Sprint(i), v, ok)
+		}
+	}
+
+	if got := len(g.Keys()); got != 1000 {
+		t.Errorf("expected 1000 keys, but got %d", got)
+	}
+
+	if !g.Delete(500) || g.Delete(500) {
+		t.Errorf("expected Delete to return true then false")
+	}
+
+	if got := g.Flush(); got != 999 {
+		t.Errorf("expected 999 flushed values, but got %d", got)
+	}
+
+	if got := g.Count(); got != 0 {
+		t.Errorf("expected count to be 0, but got %d", got)
+	}
+}
+
+func TestShardingThreshold(t *testing.T) {
+	const (
+		shards = 8
+		max    = 80
+	)
+
+	g := NewSharded[int, int](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+		MaxRecordThreshold:  max,
+		ClearNum:            8,
+	}, shards)
+	defer g.Close()
+
+	for i := 0; i < 1000; i++ {
+		g.Set(i, i, 0)
+	}
+
+	if got := g.Count(); got > max {
+		t.Errorf("expected at most %d records, but got %d", max, got)
+	}
+}
+
+func TestShardingConcurrent(t *testing.T) {
+	g := NewSharded[int, int](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+		MaxRecordThreshold:  10_000,
+		ClearNum:            100,
+	}, 16)
+	defer g.Close()
+
+	var wg sync.WaitGroup
+
+	for w := 0; w < 8; w++ {
+		wg.Add(1)
+
+		go func(w int) {
+			defer wg.Done()
+
+			for i := 0; i < 1000; i++ {
+				key := w*1000 + i
+
+				g.Set(key, key, 0)
+				g.Get(key)
+
+				if i%3 == 0 {
+					g.Delete(key)
+				}
+			}
+		}(w)
+	}
+
+	wg.Wait()
+}
+
+func TestShardingConcurrentHooks(t *testing.T) {
+	g := NewSharded[int, int](Config{}, 8)
+	defer g.Close()
+
+	var wg sync.WaitGroup
+
+	for w := 0; w < 4; w++ {
+		wg.Add(1)
+
+		go func(w int) {
+			defer wg.Done()
+
+			for i := 0; i < 1000; i++ {
+				g.Set(w*1000+i, i, 0)
+				g.Get(w*1000 + i)
+			}
+		}(w)
+	}
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		for i := 0; i < 1000; i++ {
+			id := g.AddOnGetHook(func(key, value int) {})
+			g.RemoveOnGetHook(id)
+		}
+	}()
+
+	wg.Wait()
 }
 
 func TestGokachuReplacementStrategies(t *testing.T) {
@@ -501,11 +882,8 @@ func TestDeleteFunc(t *testing.T) {
 	g.DeleteFunc(func(_, value string) bool {
 		return strings.HasPrefix(value, "b")
 	})
-	if g.elems.Len() != 1 {
-		t.Errorf("expected elems count to be 1, but got %d", g.elems.Len())
-	}
-	if len(g.store) != 1 {
-		t.Errorf("expected store count to be 1, but got %d", g.elems.Len())
+	if g.Count() != 1 {
+		t.Errorf("expected elems count to be 1, but got %d", g.Count())
 	}
 	g.Close()
 }
@@ -588,11 +966,8 @@ func TestFlush(t *testing.T) {
 	g.Set("b3", "b3", 0)
 	g.Set("c1", "c1", 0)
 	g.Flush()
-	if g.elems.Len() != 0 {
-		t.Errorf("expected elems count to be 0, but got %d", g.elems.Len())
-	}
-	if len(g.store) != 0 {
-		t.Errorf("expected store count to be 0, but got %d", g.elems.Len())
+	if g.Count() != 0 {
+		t.Errorf("expected elems count to be 0, but got %d", g.Count())
 	}
 	g.Close()
 }

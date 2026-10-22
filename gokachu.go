@@ -3,25 +3,27 @@ package gokachu
 import (
 	"cmp"
 	"container/list"
+	"hash/maphash"
 	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
+var shardSeed = maphash.MakeSeed()
+
 type Gokachu[K comparable, V any] struct {
-	elems               *list.List // front of list == greater risk of deletion <---------list---------> back of list == less risk of deletion
-	store               map[K]*list.Element
-	mut                 *sync.RWMutex
-	maxRecordThreshold  int
-	clearNum            int
-	replacementStrategy ReplacementStrategy
-	pollInterval        time.Duration
-	pollCancel          chan struct{}
-	wg                  *sync.WaitGroup
+	shards       []shard[K, V]
+	pollInterval time.Duration
+	pollCancel   chan struct{}
+	closeOnce    sync.Once
+	closed       atomic.Bool
+	wg           *sync.WaitGroup
 
 	// Hooks
 	inc           atomic.Uint64
+	hooksCount    atomic.Int64
+	hooksMut      sync.RWMutex
 	onSetHooks    map[uint64]func(key K, value V, ttl time.Duration)
 	onGetHooks    map[uint64]func(key K, value V)
 	onMissHooks   map[uint64]func(key K)
@@ -37,16 +39,52 @@ type Config struct {
 
 // New creates a new Gokachu instance with the given configuration. Do not forgot call Close() function before exit.
 func New[K comparable, V any](cfg Config) *Gokachu[K, V] {
+	return newGokachu[K, V](cfg, 1)
+}
+
+// NewSharded creates a new Gokachu instance split across shardCount independent shards.
+// Keys are distributed with hash/maphash.Comparable, so any comparable key type works.
+// MaxRecordThreshold and ClearNum are applied per shard, so the total number of records is approximate.
+func NewSharded[K comparable, V any](cfg Config, shardCount int) *Gokachu[K, V] {
+	if shardCount < 1 {
+		shardCount = 1
+	}
+
+	return newGokachu[K, V](cfg, shardCount)
+}
+
+func newGokachu[K comparable, V any](cfg Config, shardCount int) *Gokachu[K, V] {
+	maxRecordThreshold := cfg.MaxRecordThreshold
+	clearNum := cfg.ClearNum
+
+	if shardCount > 1 {
+		// Keep the total threshold close to the configured one.
+		if maxRecordThreshold > 0 {
+			maxRecordThreshold = (maxRecordThreshold + shardCount - 1) / shardCount
+		}
+
+		if clearNum > 0 {
+			clearNum = (clearNum + shardCount - 1) / shardCount
+		}
+	}
+
+	shards := make([]shard[K, V], shardCount)
+
+	for i := range shards {
+		shards[i] = shard[K, V]{
+			elems:               list.New(),
+			store:               make(map[K]*list.Element),
+			maxRecordThreshold:  maxRecordThreshold,
+			clearNum:            clearNum,
+			replacementStrategy: cfg.ReplacementStrategy,
+		}
+	}
+
 	g := &Gokachu[K, V]{
-		elems:               list.New(),
-		store:               make(map[K]*list.Element),
-		mut:                 new(sync.RWMutex),
-		maxRecordThreshold:  cfg.MaxRecordThreshold,
-		clearNum:            cfg.ClearNum,
-		replacementStrategy: cfg.ReplacementStrategy,
-		pollInterval:        cmp.Or(cfg.PollInterval, time.Second), // Default poll interval is 1 second
-		pollCancel:          make(chan struct{}),
-		wg:                  new(sync.WaitGroup),
+		shards:       shards,
+		pollInterval: cmp.Or(cfg.PollInterval, time.Second), // Default poll interval is 1 second
+		pollCancel:   make(chan struct{}),
+		wg:           new(sync.WaitGroup),
 
 		// Hooks
 		onSetHooks:    make(map[uint64]func(key K, value V, ttl time.Duration)),
@@ -62,11 +100,21 @@ func New[K comparable, V any](cfg Config) *Gokachu[K, V] {
 	return g
 }
 
+func (g *Gokachu[K, V]) shardFor(key K) *shard[K, V] {
+	if len(g.shards) == 1 {
+		return &g.shards[0]
+	}
+
+	return &g.shards[maphash.Comparable(shardSeed, key)%uint64(len(g.shards))]
+}
+
 // Set sets a value in the cache with a TTL. If the TTL is 0, the value will not expire.
 func (g *Gokachu[K, V]) Set(key K, v V, ttl time.Duration, hooks ...Hook) {
-	defer g.lock()()
+	s := g.shardFor(key)
 
-	if g.pollCancel == nil {
+	defer s.lock()()
+
+	if g.closed.Load() {
 		return
 	}
 
@@ -78,7 +126,7 @@ func (g *Gokachu[K, V]) Set(key K, v V, ttl time.Duration, hooks ...Hook) {
 	}
 
 	// if exists
-	if oldElem, ok := g.store[key]; ok {
+	if oldElem, ok := s.store[key]; ok {
 		oldElem.Value.(*valueWithTTL[K, V]).value = v
 		oldElem.Value.(*valueWithTTL[K, V]).expireTime = exp
 
@@ -93,11 +141,11 @@ func (g *Gokachu[K, V]) Set(key K, v V, ttl time.Duration, hooks ...Hook) {
 			}
 		}
 
-		switch g.replacementStrategy {
+		switch s.replacementStrategy {
 		case ReplacementStrategyLRU:
-			g.elems.MoveToBack(oldElem)
+			s.elems.MoveToBack(oldElem)
 		case ReplacementStrategyMRU:
-			g.elems.MoveToFront(oldElem)
+			s.elems.MoveToFront(oldElem)
 		}
 
 		return
@@ -106,8 +154,8 @@ func (g *Gokachu[K, V]) Set(key K, v V, ttl time.Duration, hooks ...Hook) {
 	// if not exists
 
 	// clear if cache is full
-	if g.maxRecordThreshold > 0 && g.clearNum > 0 && g.replacementStrategy > ReplacementStrategyNone && len(g.store) >= g.maxRecordThreshold {
-		g.clear()
+	if s.maxRecordThreshold > 0 && s.clearNum > 0 && s.replacementStrategy > ReplacementStrategyNone && len(s.store) >= s.maxRecordThreshold {
+		s.clear()
 	}
 
 	value := &valueWithTTL[K, V]{
@@ -127,19 +175,21 @@ func (g *Gokachu[K, V]) Set(key K, v V, ttl time.Duration, hooks ...Hook) {
 		}
 	}
 
-	switch g.replacementStrategy {
+	switch s.replacementStrategy {
 	case ReplacementStrategyFIFO, ReplacementStrategyLRU, ReplacementStrategyLFU, ReplacementStrategyMFU, ReplacementStrategyNone:
-		g.store[key] = g.elems.PushBack(value)
+		s.store[key] = s.elems.PushBack(value)
 	case ReplacementStrategyLIFO, ReplacementStrategyMRU:
-		g.store[key] = g.elems.PushFront(value)
+		s.store[key] = s.elems.PushFront(value)
 	}
 }
 
 // Get gets a value from the cache. Returns false in second value if the key does not exist.
 func (g *Gokachu[K, V]) Get(key K) (V, bool) {
-	defer g.lock()()
+	s := g.shardFor(key)
 
-	item, ok := g.store[key]
+	defer s.lock()()
+
+	item, ok := s.store[key]
 	if !ok {
 		g.runOnMissHooks(key)
 		return *new(V), false
@@ -147,15 +197,15 @@ func (g *Gokachu[K, V]) Get(key K) (V, bool) {
 
 	value := item.Value.(*valueWithTTL[K, V])
 
-	switch g.replacementStrategy {
+	switch s.replacementStrategy {
 	case ReplacementStrategyLRU:
-		g.elems.MoveToBack(item)
+		s.elems.MoveToBack(item)
 	case ReplacementStrategyMRU:
-		g.elems.MoveToFront(item)
+		s.elems.MoveToFront(item)
 	case ReplacementStrategyMFU, ReplacementStrategyLFU:
 		value.hitCount++
 
-		g.moveByHits(item)
+		s.moveByHits(item)
 	}
 
 	// run hooks before getting value
@@ -185,22 +235,30 @@ func (g *Gokachu[K, V]) GetAs[V2 any](key K) (V2, bool) {
 
 // GetFunc retrieves a first matching value from the cache using a callback function. If all matches return false, the second value also returns false.
 func (g *Gokachu[K, V]) GetFunc(cb func(key K, value V) bool) (V, bool) {
-	unlock := g.rlock()
-
 	var foundKey K
 
 	found := false
 
-	for k, v := range g.store {
-		if cb(k, v.Value.(*valueWithTTL[K, V]).value) {
-			foundKey = k
-			found = true
+	for i := range g.shards {
+		s := &g.shards[i]
 
+		unlock := s.rlock()
+
+		for k, v := range s.store {
+			if cb(k, v.Value.(*valueWithTTL[K, V]).value) {
+				foundKey = k
+				found = true
+
+				break
+			}
+		}
+
+		unlock()
+
+		if found {
 			break
 		}
 	}
-
-	unlock()
 
 	if found {
 		return g.Get(foundKey)
@@ -213,9 +271,11 @@ func (g *Gokachu[K, V]) GetFunc(cb func(key K, value V) bool) (V, bool) {
 
 // Delete deletes a value from the cache and returns true if the key existed.
 func (g *Gokachu[K, V]) Delete(key K) bool {
-	defer g.lock()()
+	s := g.shardFor(key)
 
-	value, ok := g.store[key]
+	defer s.lock()()
+
+	value, ok := s.store[key]
 	if ok {
 		// run hooks before delete
 		g.runOnDeleteHooks(key, value.Value.(*valueWithTTL[K, V]).value)
@@ -225,8 +285,8 @@ func (g *Gokachu[K, V]) Delete(key K) bool {
 		}
 
 		// delete
-		g.elems.Remove(value)
-		delete(g.store, key)
+		s.elems.Remove(value)
+		delete(s.store, key)
 	}
 
 	return ok
@@ -234,25 +294,31 @@ func (g *Gokachu[K, V]) Delete(key K) bool {
 
 // DeleteFunc deletes values from the cache for which the callback returns true and returns the number of deleted values.
 func (g *Gokachu[K, V]) DeleteFunc(cb func(key K, value V) bool) int {
-	defer g.lock()()
-
 	count := 0 // deleted count
 
-	for key, value := range g.store {
-		if cb(key, value.Value.(*valueWithTTL[K, V]).value) {
-			// run hooks before delete
-			g.runOnDeleteHooks(key, value.Value.(*valueWithTTL[K, V]).value)
+	for i := range g.shards {
+		s := &g.shards[i]
 
-			if value.Value.(*valueWithTTL[K, V]).hook.OnDelete != nil {
-				value.Value.(*valueWithTTL[K, V]).hook.OnDelete()
+		func() {
+			defer s.lock()()
+
+			for key, value := range s.store {
+				if cb(key, value.Value.(*valueWithTTL[K, V]).value) {
+					// run hooks before delete
+					g.runOnDeleteHooks(key, value.Value.(*valueWithTTL[K, V]).value)
+
+					if value.Value.(*valueWithTTL[K, V]).hook.OnDelete != nil {
+						value.Value.(*valueWithTTL[K, V]).hook.OnDelete()
+					}
+
+					// delete
+					s.elems.Remove(value)
+					delete(s.store, key)
+
+					count++
+				}
 			}
-
-			// delete
-			g.elems.Remove(value)
-			delete(g.store, key)
-
-			count++
-		}
+		}()
 	}
 
 	return count
@@ -260,23 +326,35 @@ func (g *Gokachu[K, V]) DeleteFunc(cb func(key K, value V) bool) int {
 
 // Flush deletes all values from the cache and return the number of deleted values.
 func (g *Gokachu[K, V]) Flush() int {
-	defer g.lock()()
+	count := 0
 
-	g.elems.Init()
-	count := len(g.store)
-	clear(g.store)
+	for i := range g.shards {
+		s := &g.shards[i]
+
+		s.mut.Lock()
+		s.elems.Init()
+		count += len(s.store)
+		clear(s.store)
+		s.mut.Unlock()
+	}
 
 	return count
 }
 
 // Keys returns all keys in the cache.
 func (g *Gokachu[K, V]) Keys() []K {
-	defer g.rlock()()
+	keys := make([]K, 0)
 
-	keys := make([]K, 0, len(g.store))
+	for i := range g.shards {
+		s := &g.shards[i]
 
-	for e := g.elems.Front(); e != nil; e = e.Next() {
-		keys = append(keys, e.Value.(*valueWithTTL[K, V]).key)
+		unlock := s.rlock()
+
+		for e := s.elems.Front(); e != nil; e = e.Next() {
+			keys = append(keys, e.Value.(*valueWithTTL[K, V]).key)
+		}
+
+		unlock()
 	}
 
 	return keys
@@ -284,14 +362,20 @@ func (g *Gokachu[K, V]) Keys() []K {
 
 // KeysFunc returns all keys in the cache for which the callback returns true.
 func (g *Gokachu[K, V]) KeysFunc(cb func(key K, value V) bool) []K {
-	defer g.rlock()()
+	keys := make([]K, 0)
 
-	keys := make([]K, 0, len(g.store))
+	for i := range g.shards {
+		s := &g.shards[i]
 
-	for e := g.elems.Front(); e != nil; e = e.Next() {
-		if cb(e.Value.(*valueWithTTL[K, V]).key, e.Value.(*valueWithTTL[K, V]).value) {
-			keys = append(keys, e.Value.(*valueWithTTL[K, V]).key)
+		unlock := s.rlock()
+
+		for e := s.elems.Front(); e != nil; e = e.Next() {
+			if cb(e.Value.(*valueWithTTL[K, V]).key, e.Value.(*valueWithTTL[K, V]).value) {
+				keys = append(keys, e.Value.(*valueWithTTL[K, V]).key)
+			}
 		}
+
+		unlock()
 	}
 
 	return slices.Clip(keys)
@@ -299,21 +383,36 @@ func (g *Gokachu[K, V]) KeysFunc(cb func(key K, value V) bool) []K {
 
 // Count returns the number of values in the cache.
 func (g *Gokachu[K, V]) Count() int {
-	defer g.rlock()()
+	count := 0
 
-	return g.elems.Len()
+	for i := range g.shards {
+		s := &g.shards[i]
+
+		unlock := s.rlock()
+		count += s.elems.Len()
+
+		unlock()
+	}
+
+	return count
 }
 
 // CountFunc returns the number of values in the cache for which the callback returns true.
 func (g *Gokachu[K, V]) CountFunc(cb func(key K, value V) bool) int {
-	defer g.rlock()()
-
 	count := 0
 
-	for key, value := range g.store {
-		if cb(key, value.Value.(*valueWithTTL[K, V]).value) {
-			count++
+	for i := range g.shards {
+		s := &g.shards[i]
+
+		unlock := s.rlock()
+
+		for key, value := range s.store {
+			if cb(key, value.Value.(*valueWithTTL[K, V]).value) {
+				count++
+			}
 		}
+
+		unlock()
 	}
 
 	return count
@@ -321,36 +420,28 @@ func (g *Gokachu[K, V]) CountFunc(cb func(key K, value V) bool) int {
 
 // Close closes the cache and all associated resources.
 func (g *Gokachu[K, V]) Close() {
-	g.mut.Lock()
+	g.closeOnce.Do(func() {
+		g.closed.Store(true)
+		close(g.pollCancel)
+	})
 
-	if g.pollCancel == nil {
-		g.mut.Unlock()
-		return
+	for i := range g.shards {
+		s := &g.shards[i]
+
+		s.mut.Lock()
+		clear(s.store)
+		s.elems.Init()
+		s.mut.Unlock()
 	}
 
-	close(g.pollCancel)
-	clear(g.store)
-
 	// clear hooks
+	g.hooksMut.Lock()
 	g.onSetHooks = nil
 	g.onGetHooks = nil
 	g.onDeleteHooks = nil
 	g.onMissHooks = nil
-
-	g.elems.Init()
-	g.mut.Unlock()
+	g.hooksCount.Store(0)
+	g.hooksMut.Unlock()
 
 	g.wg.Wait()
-}
-
-func (k *Gokachu[K, V]) lock() func() {
-	k.mut.Lock()
-
-	return k.mut.Unlock
-}
-
-func (k *Gokachu[K, V]) rlock() func() {
-	k.mut.RLock()
-
-	return k.mut.RUnlock
 }

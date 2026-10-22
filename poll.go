@@ -7,34 +7,37 @@ func (g *Gokachu[K, V]) poll() {
 	ticker := time.NewTicker(g.pollInterval)
 	defer ticker.Stop()
 
+	defer g.wg.Done()
+
 	for {
 		select {
 		case <-g.pollCancel: // when Close method called, polling stops
-			g.pollCancel = nil
-			g.wg.Done()
-
 			return
 
 		case <-ticker.C:
-			g.mut.Lock()
-
 			now := time.Now()
 
-			for key := range g.store {
-				elem := g.store[key]
+			for i := range g.shards {
+				s := &g.shards[i]
 
-				// elem must be non-expired
-				if elem.Value.(*valueWithTTL[K, V]).expireTime.IsZero() || elem.Value.(*valueWithTTL[K, V]).expireTime.After(now) {
-					continue
+				s.mut.Lock()
+
+				for key := range s.store {
+					elem := s.store[key]
+
+					// elem must be non-expired
+					if elem.Value.(*valueWithTTL[K, V]).expireTime.IsZero() || elem.Value.(*valueWithTTL[K, V]).expireTime.After(now) {
+						continue
+					}
+
+					// delete expired element
+					g.runOnDeleteHooks(key, elem.Value.(*valueWithTTL[K, V]).value)
+					s.elems.Remove(elem)
+					delete(s.store, key)
 				}
 
-				// delete expired element
-				g.runOnDeleteHooks(key, elem.Value.(*valueWithTTL[K, V]).value)
-				g.elems.Remove(elem)
-				delete(g.store, key)
+				s.mut.Unlock()
 			}
-
-			g.mut.Unlock()
 		}
 	}
 }

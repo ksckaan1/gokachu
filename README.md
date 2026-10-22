@@ -16,6 +16,7 @@ Gokachu is a powerful and easy-to-use in-memory cache library for Go. It provide
 
 - 🔒 **Thread-safe:** Can be safely used in concurrent applications.
 - 🧬 **Generics support:** Store any type of data.
+- 🧩 **Optional sharding:** Split the cache across independent shards to scale concurrent access.
 - ⏰ **TTL (Time-To-Live) support:** Automatically remove expired items.
 - 🔄 **Cache Replacement Strategies:**
   - LRU (Least Recently Used)
@@ -86,6 +87,21 @@ config := gokachu.Config{
 }
 cache := gokachu.New[string, string](config)
 ```
+
+### 🧩 Sharding
+
+For highly concurrent workloads, `NewSharded` splits the cache across independent shards, each with its own lock. Keys are distributed with `hash/maphash.Comparable`, so any comparable key type works. A shard count around the number of CPU cores is a good starting point.
+
+```go
+cache := gokachu.NewSharded[string, string](gokachu.Config{
+	ReplacementStrategy: gokachu.ReplacementStrategyLRU,
+	MaxRecordThreshold:  100_000,
+	ClearNum:            1_000,
+}, 32)
+defer cache.Close()
+```
+
+`MaxRecordThreshold` and `ClearNum` are applied per shard, so the total number of records is approximate. Global operations such as `Keys`, `Count`, `Flush`, `GetFunc` and `DeleteFunc` visit every shard.
 
 ### ⏱️ Working with TTL
 
@@ -188,27 +204,7 @@ Gokachu provides a rich set of methods for cache manipulation:
 
 ## 📊 Benchmark
 
-```bash
-go test -bench=. -benchmem -cpu=1,4,8 -count=1 ./...
-goos: darwin
-goarch: arm64
-pkg: github.com/ksckaan1/gokachu
-cpu: Apple M1
-BenchmarkGokachu_Update          	65431836	        18.45 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGokachu_Update-4        	66597445	        18.27 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGokachu_Update-8        	66246644	        18.26 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGokachu_Get             	59910507	        18.88 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGokachu_Get-4           	60979225	        19.51 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGokachu_Get-8           	64043548	        18.88 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGokachu_InsertEvict     	 7994718	       150.8 ns/op	     112 B/op	       2 allocs/op
-BenchmarkGokachu_InsertEvict-4   	 9672381	       121.8 ns/op	     112 B/op	       2 allocs/op
-BenchmarkGokachu_InsertEvict-8   	 9836367	       122.3 ns/op	     112 B/op	       2 allocs/op
-```
-
-> [!NOTE]
-> There are 2 allocs/op in the InsertEvict benchmark. Because the cache is full, it needs to evict an item before inserting a new one. This is expected behavior.
->
-> Gokachu uses linked lists to maintain the order of items in the cache. And uses a map to store the key-value pairs. (linked list + map = 2 allocs/op)
+Full results, methodology and the commands to reproduce them are in [BENCHMARK.md](./BENCHMARK.md).
 
 ## 🤝 Contributing
 
