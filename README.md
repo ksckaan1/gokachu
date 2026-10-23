@@ -192,6 +192,7 @@ cache.Set("my-key", "my-value", 0,
 Gokachu provides a rich set of methods for cache manipulation:
 
 - `Delete(key K) bool`: Deletes a value from the cache. It returns `true` if the key existed and was deleted, otherwise `false`.
+- `HasKey(key K) bool`: Reports whether the key exists without changing LRU order or running hooks.
 - `GetAs[V2 any](key K) (V2, bool)`: Retrieves a value and converts it to the specified type. Useful when the cache stores `any` type values.
 - `GetFunc(cb func(key K, value V) bool) (V, bool)`: Retrieves the first matching value.
 - `DeleteFunc(cb func(key K, value V) bool) int`: Deletes values for which the callback returns true. It returns the number of deleted items.

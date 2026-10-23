@@ -269,6 +269,18 @@ func (g *Gokachu[K, V]) GetFunc(cb func(key K, value V) bool) (V, bool) {
 	return zeroV, false
 }
 
+// HasKey reports whether key exists in the cache without updating access order or running hooks.
+func (g *Gokachu[K, V]) HasKey(key K) bool {
+	s := g.shardFor(key)
+
+	unlock := s.rlock()
+	defer unlock()
+
+	_, ok := s.store[key]
+
+	return ok
+}
+
 // Delete deletes a value from the cache and returns true if the key existed.
 func (g *Gokachu[K, V]) Delete(key K) bool {
 	s := g.shardFor(key)

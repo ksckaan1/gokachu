@@ -855,6 +855,44 @@ func TestClose(t *testing.T) {
 	})
 }
 
+func TestHasKey(t *testing.T) {
+	g := New[string, string](Config{
+		ReplacementStrategy: ReplacementStrategyLRU,
+	})
+	defer g.Close()
+
+	var gets atomic.Int64
+	g.AddOnGetHook(func(key, value string) { gets.Add(1) })
+
+	var misses atomic.Int64
+	g.AddOnMissHook(func(key string) { misses.Add(1) })
+
+	g.Set("a", "1", 0)
+	g.Set("b", "2", 0)
+
+	if !g.HasKey("a") {
+		t.Errorf("expected key a to exist")
+	}
+
+	if g.HasKey("missing") {
+		t.Errorf("expected key to not exist")
+	}
+
+	if got := gets.Load(); got != 0 {
+		t.Errorf("expected no get hook call, but got %d", got)
+	}
+
+	if got := misses.Load(); got != 0 {
+		t.Errorf("expected no miss hook call, but got %d", got)
+	}
+
+	// HasKey must not touch the LRU order: a is still the oldest entry.
+	front := g.shards[0].elems.Front().Value.(*valueWithTTL[string, string]).key
+	if front != "a" {
+		t.Errorf("expected front key to be a, but got %s", front)
+	}
+}
+
 func TestDelete(t *testing.T) {
 	g := New[string, string](Config{})
 	g.Set("key1", "value", 0)
